@@ -11,10 +11,12 @@ let control_speed_delta = 0.001
 const velocity_vector_scale = 20
 
 let predict_orbit = true
-const orbit_alpha = 0.3
+const orbit_alpha = 0.7
 let orbit_prediction_steps = 128
 let orbit_prediction_plot_step = 1
 const orbit_minimum_periapsis = 10
+
+let selected_spaceship = 0
 
 /*
  * Represents a single object with mass and absolute velocity
@@ -243,6 +245,7 @@ class Simulation {
       "g          | Toggle orbit prediction",
       "h, j       | Increase or decrease orbit prediction steps",
       "k, l       | Increase or decrease orbit step interval",
+      "Tab        | Change active body",
       "r          | Reload page",
       "",
       "Bodies:"
@@ -252,9 +255,17 @@ class Simulation {
       const velocity = Math.round( Math.sqrt(body.velx * body.velx + body.vely * body.vely) * 100) / 100
       const acceleration = Math.round(body.acceleration * 100) / 100
 
-      status_lines.push(
-        "#" + index + " | V: " + velocity + " G: " + acceleration
-      )
+      let line = "#" + index
+
+      if (index == selected_spaceship) {
+        line += " Active "
+      } else {
+        line += "        "
+      }
+
+      line += "| V: " + velocity.toFixed(3) + " G: " + acceleration.toFixed(3)
+
+      status_lines.push(line)
     })
 
     // Draw status information
@@ -279,12 +290,12 @@ main_canvas.height = canvas_side_h
 const main_simulation = new Simulation(main_canvas)
 
 // Specific bodies
-const star =      new Body(10000,   0,    0,  0,  0,    "yellow",   false,  50)
+const star =      new Body(100,      0,    0,  0,  0,    "yellow",   false,  50)
 const planet =    new Body(500,     500,  0,  0,  14,   "blue",     true,   7)
-const spaceship = new Body(1,       550,  0,  0,  22,    "gold",     true,   3)
+const spaceship = new Body(1,       550,  0,  0,  0,    "gold",     true,   3)
 
 main_simulation.add_body(star)
-main_simulation.add_body(planet)
+// main_simulation.add_body(planet)
 main_simulation.add_body(spaceship)
 
 const fps = 64
@@ -299,22 +310,22 @@ window.onkeydown = (event) => {
 
   switch (event.key) {
     case "w": {
-      spaceship.vely -= control_speed_delta
+      main_simulation.bodies[selected_spaceship].vely -= control_speed_delta
       break
     }
 
     case "a": {
-      spaceship.velx -= control_speed_delta
+      main_simulation.bodies[selected_spaceship].velx -= control_speed_delta
       break
     }
 
     case "s": {
-      spaceship.vely += control_speed_delta
+      main_simulation.bodies[selected_spaceship].vely += control_speed_delta
       break
     }
 
     case "d": {
-      spaceship.velx += control_speed_delta
+      main_simulation.bodies[selected_spaceship].velx += control_speed_delta
       break
     }
 
@@ -355,6 +366,11 @@ window.onkeydown = (event) => {
 
     case "l": {
       orbit_prediction_plot_step += 1
+      break
+    }
+
+    case "Tab": {
+      selected_spaceship = (selected_spaceship + 1) % main_simulation.bodies.length
       break
     }
 
