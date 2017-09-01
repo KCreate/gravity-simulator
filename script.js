@@ -7,12 +7,12 @@ const canvas_side_h = 1000
 const body_min_radius = 5
 const orbit_trace_decay = 1
 const com_radius = 3
-let control_speed_delta = 0.001
+let control_speed_delta = 0.1
 const velocity_vector_scale = 20
 
 let predict_orbit = true
 const orbit_alpha = 0.7
-let orbit_prediction_steps = 128
+let orbit_prediction_steps = 1024
 let orbit_prediction_plot_step = 1
 const orbit_minimum_periapsis = 10
 
@@ -82,7 +82,7 @@ class Simulation {
 
   step() {
 
-    // Apply gravitational forces
+    // Apply gravitational and collision forces
     this.bodies.map((source) => {
       if (source.mass == 0) return
 
@@ -98,7 +98,7 @@ class Simulation {
         // Calculate the distance between the two bodies
         const delx = other.posx - source.posx
         const dely = other.posy - source.posy
-        const distance = Math.max(orbit_minimum_periapsis, Math.sqrt(delx * delx + dely * dely))
+        const distance = Math.sqrt(delx * delx + dely * dely)
 
         // Calculate the gravitational attraction based on the distance
         // between the two bodies
@@ -122,6 +122,20 @@ class Simulation {
 
         source.velx += ax
         source.vely += ay
+
+        // Calculate the distance between the bodies in the next step
+        // assuming there are no gravitational changes during the step
+        // This is of course wrong but its good enough
+        const delx_next = (other.posx + other.velx) - (source.posx + source.velx)
+        const dely_next = (other.posy + other.vely) - (source.posy + source.vely)
+        const distance_next = Math.sqrt(delx_next * delx_next + dely_next * dely_next)
+
+        if (source.radius + other.radius >= distance_next) {
+
+          // Calculate with how much velocity on each axis the bodies have collided
+          //
+
+        }
       })
 
       source.acceleration = Math.sqrt(sax * sax + say * say)
