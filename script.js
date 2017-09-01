@@ -12,8 +12,8 @@ const velocity_vector_scale = 20
 
 let predict_orbit = true
 const orbit_alpha = 0.3
-const orbit_prediction_steps = 128
-const orbit_prediction_plot_step = 1
+let orbit_prediction_steps = 128
+let orbit_prediction_plot_step = 1
 const orbit_minimum_periapsis = 10
 
 /*
@@ -234,6 +234,8 @@ class Simulation {
       "o, p       | Increase or decrease thrust",
       "q          | Stop simulation",
       "g          | Toggle orbit prediction",
+      "h, j       | Increase or decrease orbit prediction steps",
+      "k, l       | Increase or decrease orbit step interval",
       "r          | Reload page",
       "",
       "Bodies:"
@@ -278,7 +280,7 @@ main_simulation.add_body(star)
 main_simulation.add_body(planet)
 main_simulation.add_body(spaceship)
 
-const fps = 16
+const fps = 64
 const game_interval = setInterval(() => {
   main_simulation.step()
   main_simulation.focus_body(star)
@@ -326,6 +328,26 @@ window.onkeydown = (event) => {
 
     case "g": {
       predict_orbit = !predict_orbit
+      break
+    }
+
+    case "h": {
+      orbit_prediction_steps -= 8
+      break
+    }
+
+    case "j": {
+      orbit_prediction_steps += 8
+      break
+    }
+
+    case "k": {
+      orbit_prediction_plot_step -= 1
+      break
+    }
+
+    case "l": {
+      orbit_prediction_plot_step += 1
       break
     }
 
