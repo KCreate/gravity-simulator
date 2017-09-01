@@ -29,7 +29,7 @@ class Body {
     this.color = color
     this.predict_orbit = predict_orbit
     this.radius = radius
-    this.gravitational_stress = 0
+    this.acceleration = 0
   }
 }
 
@@ -84,7 +84,10 @@ class Simulation {
     this.bodies.map((source) => {
       if (source.mass == 0) return
 
-      source.gravitational_stress = 0
+      source.acceleration = 0
+
+      let sax = 0
+      let say = 0
 
       this.bodies.map((other) => {
         if (source === other) return
@@ -103,7 +106,6 @@ class Simulation {
         // NOTE: m2 is set to 1 to only calculate the force exerted
         // onto the source object by the other object
         const force = G * ((source.mass * other.mass) / (distance * distance))
-        source.gravitational_stress += force
 
         // Divide the force into it's x and y components
         const fx = (force / distance) * delx
@@ -113,9 +115,14 @@ class Simulation {
         const ax = fx / source.mass
         const ay = fy / source.mass
 
+        sax += ax
+        say += ay
+
         source.velx += ax
         source.vely += ay
       })
+
+      source.acceleration = Math.sqrt(sax * sax + say * say)
     })
 
     // Move the bodies
@@ -243,10 +250,10 @@ class Simulation {
 
     this.bodies.map((body, index) => {
       const velocity = Math.round( Math.sqrt(body.velx * body.velx + body.vely * body.vely) * 100) / 100
-      const gravitational_stress = Math.round(body.gravitational_stress * 100) / 100
+      const acceleration = Math.round(body.acceleration * 100) / 100
 
       status_lines.push(
-        "#" + index + " | V: " + velocity + " Fg: " + gravitational_stress
+        "#" + index + " | V: " + velocity + " G: " + acceleration
       )
     })
 
