@@ -28,10 +28,15 @@ class Body {
     this.posy = posy
     this.velx = velx
     this.vely = vely
+    this.accx = 0
+    this.accy = 0
     this.color = color
     this.predict_orbit = predict_orbit
     this.radius = radius
-    this.acceleration = 0
+  }
+  
+  speed() {
+    return Math.sqrt(this.velx * this.velx + this.vely * this.vely)
   }
 }
 
@@ -43,17 +48,17 @@ class Simulation {
     this.bodies = []
     this.canvas = canvas
     this.context = canvas.getContext("2d")
-    this.camerax = 0
-    this.cameray = 0
+    this.focused_body = 0
 
     this.saved_state = undefined
   }
+  
+  camerax() { return this.bodies[this.focused_body].posx - canvas_side_w / 2 }
+  cameray() { return this.bodies[this.focused_body].posy - canvas_side_h / 2 }
 
   save_state() {
     this.saved_state = {
-      bodies: this.bodies.map((body) => Object.assign({}, body)),
-      camerax: this.camerax,
-      cameray: this.cameray
+      bodies: this.bodies.map((body) => Object.assign({}, body))
     }
   }
 
@@ -66,14 +71,6 @@ class Simulation {
       this.bodies[index].velx = save.velx
       this.bodies[index].vely = save.vely
     })
-
-    this.camerax = this.saved_state.camerax
-    this.cameray = this.saved_state.cameray
-  }
-
-  focus_body(body) {
-    this.camerax = body.posx - canvas_side_w / 2
-    this.cameray = body.posy - canvas_side_h / 2
   }
 
   add_body(body) {
@@ -85,11 +82,6 @@ class Simulation {
     // Apply gravitational and collision forces
     this.bodies.map((source) => {
       if (source.mass == 0) return
-
-      source.acceleration = 0
-
-      let sax = 0
-      let say = 0
 
       this.bodies.map((other) => {
         if (source === other) return
@@ -117,11 +109,23 @@ class Simulation {
         const ax = fx / source.mass
         const ay = fy / source.mass
 
-        sax += ax
-        say += ay
-
         source.velx += ax
         source.vely += ay
+      })
+    })
+    
+    // Collision handling
+    this.bodies.map((source) => {
+      if (source.mass == 0) return
+
+      this.bodies.map((other) => {
+        if (source === other) return
+        if (other.mass == 0) return
+
+        // Calculate the distance between the two bodies
+        const delx = other.posx - source.posx
+        const dely = other.posy - source.posy
+        const distance = Math.sqrt(delx * delx + dely * dely)
 
         // Calculate the distance between the bodies in the next step
         // assuming there are no gravitational changes during the step
@@ -129,20 +133,23 @@ class Simulation {
         const delx_next = (other.posx + other.velx) - (source.posx + source.velx)
         const dely_next = (other.posy + other.vely) - (source.posy + source.vely)
         const distance_next = Math.sqrt(delx_next * delx_next + dely_next * dely_next)
-
+        
         if (source.radius + other.radius >= distance_next) {
-
-          // Calculate with how much velocity on each axis the bodies have collided
-          //
-
+          const other_acceleration = Math.sqrt(other.mass * other.speed() * other.speed())
+          const accx = (other_acceleration / distance) * delx
+          const accy = (other_acceleration / distance) * dely
+          
+          source.accx -= accx / source.mass
+          source.accy -= accy / source.mass
         }
       })
-
-      source.acceleration = Math.sqrt(sax * sax + say * say)
     })
 
     // Move the bodies
     this.bodies.map((body) => {
+      body.velx += body.accx
+      body.vely += body.accy
+      body.accx = body.accy = 0
       body.posx += body.velx
       body.posy += body.vely
     })
@@ -160,8 +167,8 @@ class Simulation {
       this.save_state()
 
       let last_body_coordinates = this.bodies.map((body) => ({
-        x: body.posx - this.camerax,
-        y: body.posy - this.cameray
+        x: body.posx - this.camerax(),
+        y: body.posy - this.cameray()
       }))
 
       for (let i = 0; i < orbit_prediction_steps; i++) {
@@ -174,8 +181,8 @@ class Simulation {
             // Calculate coordinates of orbit plot points
             const start_pos_x = last_body_coordinates[index].x
             const start_pos_y = last_body_coordinates[index].y
-            const end_pos_x = body.posx - this.camerax
-            const end_pos_y = body.posy - this.cameray
+            const end_pos_x = body.posx - this.camerax()
+            const end_pos_y = body.posy - this.cameray()
 
             this.context.beginPath()
             this.context.globalAlpha = orbit_alpha
@@ -192,17 +199,14 @@ class Simulation {
         }
 
         this.step()
-        this.focus_body(this.bodies[0])
       }
       this.rewind()
     }
 
     // Render the bodies
-    this.bodies.map((body) => {
-
-      // calculate radius of body based on its mass
-      const canvas_pos_x = body.posx - this.camerax
-      const canvas_pos_y = body.posy - this.cameray
+    this.bodies.map((body, index) => {
+      const canvas_pos_x = body.posx - this.camerax()
+      const canvas_pos_y = body.posy - this.cameray()
 
       this.context.beginPath()
       this.context.arc(canvas_pos_x, canvas_pos_y, body.radius, 0, TAU)
@@ -215,14 +219,16 @@ class Simulation {
       this.context.fill()
 
       // draw velocity vector
-      const velocity_vector_x = canvas_pos_x + (body.velx * velocity_vector_scale)
-      const velocity_vector_y = canvas_pos_y + (body.vely * velocity_vector_scale)
-      this.context.beginPath()
-      this.context.moveTo(canvas_pos_x, canvas_pos_y)
-      this.context.lineTo(velocity_vector_x, velocity_vector_y)
-      this.context.strokeStyle = "green"
-      this.context.stroke()
-      this.context.closePath()
+      if (selected_spaceship == index) {
+        const velocity_vector_x = canvas_pos_x + ((body.velx - this.bodies[this.focused_body].velx) * velocity_vector_scale)
+        const velocity_vector_y = canvas_pos_y + ((body.vely - this.bodies[this.focused_body].vely) * velocity_vector_scale)
+        this.context.beginPath()
+        this.context.moveTo(canvas_pos_x, canvas_pos_y)
+        this.context.lineTo(velocity_vector_x, velocity_vector_y)
+        this.context.strokeStyle = "green"
+        this.context.stroke()
+        this.context.closePath()
+      }
     })
 
     // Calculate the center of mass
@@ -238,7 +244,7 @@ class Simulation {
     const comy = tmpy / mt
 
     this.context.beginPath()
-    this.context.arc(comx - this.camerax, comy - this.cameray, com_radius, 0, TAU)
+    this.context.arc(comx - this.camerax(), comy - this.cameray(), com_radius, 0, TAU)
     this.context.fillStyle = "green"
     this.context.closePath()
     this.context.fill()
@@ -253,31 +259,37 @@ class Simulation {
       "Orbit Prediction Interval: " + orbit_prediction_plot_step,
       "",
       "Controls:",
-      "w, a, s, d | Apply thrust to spacecraft",
-      "o, p       | Increase or decrease thrust",
-      "q          | Stop simulation",
-      "g          | Toggle orbit prediction",
-      "h, j       | Increase or decrease orbit prediction steps",
-      "k, l       | Increase or decrease orbit step interval",
-      "Tab        | Change active body",
-      "r          | Reload page",
+      "w, a, s, d   | Apply thrust to spacecraft",
+      "o, p         | Increase or decrease thrust",
+      "q            | Stop simulation",
+      "g            | Toggle orbit prediction",
+      "h, j         | Increase or decrease orbit prediction steps",
+      "k, l         | Increase or decrease orbit step interval",
+      "Tab          | Change active body",
+      "Shift + Tab  | Change focused body",
+      "r            | Reload page",
       "",
       "Bodies:"
     ]
 
     this.bodies.map((body, index) => {
       const velocity = Math.round( Math.sqrt(body.velx * body.velx + body.vely * body.vely) * 100) / 100
-      const acceleration = Math.round(body.acceleration * 100) / 100
 
       let line = "#" + index
 
+      if (index == this.focused_body) {
+        line += " Focused "
+      } else {
+        line += "         "
+      }
+      
       if (index == selected_spaceship) {
         line += " Active "
       } else {
         line += "        "
       }
 
-      line += "| V: " + velocity.toFixed(3) + " G: " + acceleration.toFixed(3)
+      line += "| V: " + velocity.toFixed(3)
 
       status_lines.push(line)
     })
@@ -304,24 +316,27 @@ main_canvas.height = canvas_side_h
 const main_simulation = new Simulation(main_canvas)
 
 // Specific bodies
-const star =      new Body(100,      0,    0,  0,  0,    "yellow",   false,  50)
-const planet =    new Body(500,     500,  0,  0,  14,   "blue",     true,   7)
-const spaceship = new Body(1,       550,  0,  0,  0,    "gold",     true,   3)
+const reference =     new Body(0, 0, 0, 0, 0, "white", false, 1)
 
+const star = new Body(800, 0, 0, 0, 0, "yellow", true, 40)
+const planet = new Body(200, 500, 0, 0, 4.4, "blue", true, 10)
+const spacecraft = new Body(0.001, 560, 0, 0, 10.2, "gold", true, 2)
+
+main_simulation.add_body(reference)
 main_simulation.add_body(star)
-// main_simulation.add_body(planet)
-main_simulation.add_body(spaceship)
+main_simulation.add_body(planet)
+main_simulation.add_body(spacecraft)
 
-const fps = 64
+main_simulation.focused_body = 2
+selected_spaceship = 3
+
+const fps = 16
 const game_interval = setInterval(() => {
   main_simulation.step()
-  main_simulation.focus_body(star)
   main_simulation.render()
 }, 1000 / fps)
 
 window.onkeydown = (event) => {
-  event.preventDefault()
-
   switch (event.key) {
     case "w": {
       main_simulation.bodies[selected_spaceship].vely -= control_speed_delta
@@ -364,12 +379,12 @@ window.onkeydown = (event) => {
     }
 
     case "h": {
-      orbit_prediction_steps -= 8
+      orbit_prediction_steps *= 0.9
       break
     }
 
     case "j": {
-      orbit_prediction_steps += 8
+      orbit_prediction_steps *= 1.1
       break
     }
 
@@ -384,7 +399,12 @@ window.onkeydown = (event) => {
     }
 
     case "Tab": {
-      selected_spaceship = (selected_spaceship + 1) % main_simulation.bodies.length
+      if (event.shiftKey) {
+        main_simulation.focused_body = (main_simulation.focused_body + 1) % main_simulation.bodies.length
+      } else {
+        selected_spaceship = (selected_spaceship + 1) % main_simulation.bodies.length
+      }
+		
       break
     }
 
@@ -392,7 +412,11 @@ window.onkeydown = (event) => {
       window.location = window.location
       break
     }
+    
+    default: { return }
   }
+  
+  event.preventDefault()
 }
 
 
